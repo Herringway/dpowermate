@@ -3,96 +3,28 @@ module powermate;
 import std.stdio, std.conv, std.string, std.algorithm, std.exception;
 
 version(linux) {
-	version(X86) {
-		static ushort EV_SYN = 0; // Synchronization events
-		static ushort EV_KEY = 1; // Button push events
-		static ushort EV_REL = 2; // Relative axis change events
-		static ushort EV_MSC = 4; // Misc events
-
-		static ushort SYN_REPORT = 0; // Reports
-
-		static ushort BTN_MISC = 0x100; // Miscellaneous button pushes
-
-		static ushort REL_DIAL = 7; // Dial rotated
-
-		static ushort MSC_PULSELED = 1; // Pulse an LED
-
-		uint EVIOCGNAME(ulong len) {
-				return cast(uint)((1<<(31)) | ('E'<<(8)) | 6 | (len<<(16)));
-		}
-
-		struct timeval {
-			long tv_sec;
-			long tv_usec;
-		}
-
-		struct input_event {
-			timeval time;
-			ushort type;
-			ushort code;
-			int value;
-		}
+	import core.sys.posix.sys.ioctl;
+	import core.sys.posix.sys.time;
+	uint EVIOCGNAME(uint len) {
+		return cast(uint)_IOC(_IOC_READ, 'E', len);
 	}
-	version(X86_64) {
-		static ushort EV_SYN = 0; // Synchronization events
-		static ushort EV_KEY = 1; // Button push events
-		static ushort EV_REL = 2; // Relative axis change events
-		static ushort EV_MSC = 4; // Misc events
+	static ushort EV_SYN = 0; // Synchronization events
+	static ushort EV_KEY = 1; // Button push events
+	static ushort EV_REL = 2; // Relative axis change events
+	static ushort EV_MSC = 4; // Misc events
 
-		static ushort SYN_REPORT = 0; // Reports
+	static ushort SYN_REPORT = 0; // Reports
 
-		static ushort BTN_MISC = 0x100; // Miscellaneous button pushes
+	static ushort BTN_MISC = 0x100; // Miscellaneous button pushes
 
-		static ushort REL_DIAL = 7; // Dial rotated
+	static ushort REL_DIAL = 7; // Dial rotated
 
-		static ushort MSC_PULSELED = 1; // Pulse an LED
-
-		uint EVIOCGNAME(ulong len) {
-				return cast(uint)((1<<(31)) | ('E'<<(8)) | 6 | (len<<(16)));
-		}
-
-		struct timeval {
-			long tv_sec;
-			long tv_usec;
-		}
-
-		struct input_event {
-			timeval time;
-			ushort type;
-			ushort code;
-			int value;
-		}
-	}
-	version(ARM) { //Unable to test if these are correct...
-		static ushort EV_SYN = 0; // Synchronization events
-		static ushort EV_KEY = 1; // Button push events
-		static ushort EV_REL = 2; // Relative axis change events
-		static ushort EV_MSC = 4; // Misc events
-
-		static ushort SYN_REPORT = 0; // Reports
-
-		static ushort BTN_MISC = 0x100; // Miscellaneous button pushes
-
-		static ushort REL_DIAL = 7; // Dial rotated
-
-		static ushort MSC_PULSELED = 1; // Pulse an LED
-
-		uint EVIOCGNAME(ulong len) {
-				return cast(uint)((1<<(31)) | ('E'<<(8)) | 6 | (len<<(16)));
-		}
-
-		struct timeval {
-			int tv_sec;
-			int tv_usec;
-		}
-
-		struct input_event {
-			timeval time;
-			ushort type;
-			ushort code;
-			int value;
-		}
-	
+	static ushort MSC_PULSELED = 1; // Pulse an LED
+	struct input_event {
+		timeval time;
+		ushort type;
+		ushort code;
+		int value;
 	}
 }
 /**
@@ -301,8 +233,11 @@ unittest {
 	}
 	version(linux) {
 		import std.file;
+		//Cleanup whether successful or failure
 		scope(exit) if (exists("testEventData")) remove("testEventData");
 		scope(exit) if (exists("testOutput")) remove("testOutput");
+		
+		//Test event data reading
 		auto t1file = File("testEventData", "w+");
 		auto tmpStruct = [input_event(),input_event()];
 		tmpStruct[0].type = EV_KEY; tmpStruct[0].code = BTN_MISC; tmpStruct[0].value = 1;
@@ -326,6 +261,8 @@ unittest {
 		assert(unclicks == 1, "Click releases mismatch");
 		assert(clockwiseturns == 1, "Clockwise Turns mismatch");
 		assert(counterclockwiseturns == 1, "Counterclockwise Turns mismatch");
+		
+		//Test LED update output
 		auto t2file = File("testOutput", "w+");
 		auto powermate2 = new PowerMate(t2file);
 		powermate2.Brightness = 127;
@@ -337,9 +274,9 @@ unittest {
 		ubyte[24] buffer;
 		t2file.seek(0);
 		t2file.rawRead(buffer);
-		version(X86) assert(buffer == [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x04, 0x00, 0x01, 0x00, 0x7f, 0xff, 0x1a, 0x00], "Output Mismatch");
-		version(X86_64) assert(buffer == [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x04, 0x00, 0x01, 0x00, 0x7f, 0xff, 0x1a, 0x00], "Output Mismatch");
-		version(ARM) assert(buffer == [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x04, 0x00, 0x01, 0x00, 0x7f, 0xff, 0x1a, 0x00], "Output Mismatch");
+		union input_test { input_event a; ubyte[a.sizeof] b; }
+		static input_test test = {a: input_event(timeval(), 0x0004, 0x0001, 0x001AFF7F)}; //Output should equal this on all platforms
+		assert(buffer == test.b, "Bad output from LED update");
 	}
 }
 
