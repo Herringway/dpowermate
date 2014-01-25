@@ -3,90 +3,206 @@ module powermate;
 import std.stdio, std.conv, std.string, std.algorithm, std.exception;
 
 version(linux) {
-	static ushort EV_SYN = 0; // Synchronization events
-	static ushort EV_KEY = 1; // Button push events
-	static ushort EV_REL = 2; // Relative axis change events
-	static ushort EV_MSC = 4; // Misc events
+	version(X86) {
+		static ushort EV_SYN = 0; // Synchronization events
+		static ushort EV_KEY = 1; // Button push events
+		static ushort EV_REL = 2; // Relative axis change events
+		static ushort EV_MSC = 4; // Misc events
 
-	static ushort SYN_REPORT = 0; // Reports
+		static ushort SYN_REPORT = 0; // Reports
 
-	static ushort BTN_MISC = 0x100; // Miscellaneous button pushes
+		static ushort BTN_MISC = 0x100; // Miscellaneous button pushes
 
-	static ushort REL_DIAL = 7; // Dial rotated
+		static ushort REL_DIAL = 7; // Dial rotated
 
-	static ushort MSC_PULSELED = 1; // Pulse an LED
+		static ushort MSC_PULSELED = 1; // Pulse an LED
 
-	uint EVIOCGNAME(ulong len) {
-			return cast(uint)((1<<(31)) | ('E'<<(8)) | 6 | (len<<(16)));
+		uint EVIOCGNAME(ulong len) {
+				return cast(uint)((1<<(31)) | ('E'<<(8)) | 6 | (len<<(16)));
+		}
+
+		struct timeval {
+			long tv_sec;
+			long tv_usec;
+		}
+
+		struct input_event {
+			timeval time;
+			ushort type;
+			ushort code;
+			int value;
+		}
 	}
+	version(X86_64) {
+		static ushort EV_SYN = 0; // Synchronization events
+		static ushort EV_KEY = 1; // Button push events
+		static ushort EV_REL = 2; // Relative axis change events
+		static ushort EV_MSC = 4; // Misc events
 
-	struct timeval {
-		long tv_sec;
-		long tv_usec;
+		static ushort SYN_REPORT = 0; // Reports
+
+		static ushort BTN_MISC = 0x100; // Miscellaneous button pushes
+
+		static ushort REL_DIAL = 7; // Dial rotated
+
+		static ushort MSC_PULSELED = 1; // Pulse an LED
+
+		uint EVIOCGNAME(ulong len) {
+				return cast(uint)((1<<(31)) | ('E'<<(8)) | 6 | (len<<(16)));
+		}
+
+		struct timeval {
+			long tv_sec;
+			long tv_usec;
+		}
+
+		struct input_event {
+			timeval time;
+			ushort type;
+			ushort code;
+			int value;
+		}
 	}
+	version(ARM) { //Unable to test if these are correct...
+		static ushort EV_SYN = 0; // Synchronization events
+		static ushort EV_KEY = 1; // Button push events
+		static ushort EV_REL = 2; // Relative axis change events
+		static ushort EV_MSC = 4; // Misc events
 
-	struct input_event {
-		timeval time;
-		ushort type;
-		ushort code;
-		int value;
+		static ushort SYN_REPORT = 0; // Reports
+
+		static ushort BTN_MISC = 0x100; // Miscellaneous button pushes
+
+		static ushort REL_DIAL = 7; // Dial rotated
+
+		static ushort MSC_PULSELED = 1; // Pulse an LED
+
+		uint EVIOCGNAME(ulong len) {
+				return cast(uint)((1<<(31)) | ('E'<<(8)) | 6 | (len<<(16)));
+		}
+
+		struct timeval {
+			int tv_sec;
+			int tv_usec;
+		}
+
+		struct input_event {
+			timeval time;
+			ushort type;
+			ushort code;
+			int value;
+		}
+	
 	}
 }
+/**
+ * Unofficial Griffin PowerMate library for D.
+ * Authors: Cameron "Herringway" Ross
+ * Bugs: Only functions on linux
+ * Examples: 
+ * --------------------
+ * auto powermate = new Powermate("/dev/input/event0"); //Open PowerMate device with read and write access
+ * auto powermate = new Powermate(File("/dev/input/event0", "r")); //read-only access, only event handlers will be available
+ * powermate.Brightness = 0xFF; //Set brightness to maximum
+ * powermate.PulseSpeed = 0xFF; //Set pulse speed to maximum
+ * powermate.PulseTable = 1; //Use alternate pulse style
+ * powermate.PulseStyle = Powermate.PulseStyles.STYLE2; //Same as above
+ * powermate.PulseAsleep = true; //Pulse when PC is asleep
+ * powermate.PulseAwake = false; //Do not pulse when PC is awake
+ * powermate.update(); //Sets LED parameters
+ * powermate.registerEventHandler((x) => writeln(x), PowerMate.Event.BUTTONDOWN); //Register a button push event handler: writes to stdout when button is pushed
+ * powermate.readNextEvent(); //Wait until an input event occurs, then execute associated event handlers
+ * powermate.readEvents(); //Read events & execute event handlers until thread is destroyed
+ * --------------------
+ * Throws: FileException on I/O errors
+ */
 class PowerMate {
-	private File handle;
-	public ubyte Brightness = 0x80;
-	public ushort PulseSpeed = 255;
-	public ubyte PulseTable = 0;
-	public bool PulseAsleep = false;
-	public bool PulseAwake = true;
-	enum Events { BUTTONDOWN, BUTTONUP, CLOCKWISE, COUNTERCLOCKWISE };
-	private void delegate(Events event)[] ButtonDownEvents;
-	private void delegate(Events event)[] ButtonUpEvents;
-	private void delegate(Events event)[] ClockwiseEvents;
-	private void delegate(Events event)[] CounterclockwiseEvents;
+	public {
+		ubyte Brightness = 0x80; ///LED Brightness for the PowerMate device. Will not reflect current brightness until device has been updated at least once.
+		ushort PulseSpeed = 255; ///Pulse speed for the PowerMate device. Will not reflect current pulse speed until device has been updated at least once.
+		PulseStyles PulseStyle; ///Pulse style in use for the PowerMate device. Will not reflect current pulse style until device has been updated at least once.
+		bool PulseAsleep = false; ///Whether or not the PowerMate device will pulse while PC is asleep.
+		bool PulseAwake = true; ///Whether or not the PowerMate device will pulse while PC is awake.
+		enum PulseStyles : ubyte { STYLE1, STYLE2, STYLE3 }; ///Pulse styles available
+		enum Event { ALL, BUTTONDOWN, BUTTONUP, CLOCKWISE, COUNTERCLOCKWISE }; ///Events generated by device
+		
+		/**
+		 * Provides compatibility with older code. Do not use.
+		 */
+		deprecated {
+			@property ubyte PulseTable() {
+				return cast(ubyte)PulseTable;
+			}
+			@property ubyte PulseTable(ubyte table) {
+				return cast(ubyte)(PulseTable = cast(PulseStyles)table);
+			}
+		}
+	}
+	
+	private {
+		File handle; ///Internal file handle for accessing the device
+		void delegate(Event event)[][Event] eventHandlers; ///Event handlers for various events
+	}
 	invariant() {
-		enforce(PulseTable < 3, "Invalid pulse table specified");
+		enforce(PulseStyle < 3, "Invalid pulse style specified");
 		enforce(PulseSpeed < 511, "Pulse Speed too high!");
 	}
 	this(File input) {
 		handle = input;
 	}
-	void registerEventHandler(void delegate(Events event) eventHandler, Events event) {
-		if (event == Events.BUTTONDOWN)
-			ButtonDownEvents ~= eventHandler;
-		if (event == Events.BUTTONUP)
-			ButtonUpEvents ~= eventHandler;
-		if (event == Events.CLOCKWISE)
-			ClockwiseEvents ~= eventHandler;
-		if (event == Events.COUNTERCLOCKWISE)
-			CounterclockwiseEvents ~= eventHandler;
+	this(string filename) {
+		handle = File(filename, "r+");
 	}
-	void registerEventHandler(void function(Events event) eventHandler, Events event) {
+	/**
+	 * Registers an event handler that will be executed when its specified event occurs.
+	 * Params:
+	 *   eventHandler = the function to be executed
+	 *   event = the event for which the function will be executed
+	 */
+	void registerEventHandler(void delegate(Event event) eventHandler, Event event = Event.ALL) {
+		import std.traits;
+		if (event != Event.ALL)
+			eventHandlers[event] ~= eventHandler;
+		else {
+			foreach (iEvent; [EnumMembers!Event])
+				if (iEvent != Event.ALL)
+					eventHandlers[iEvent] ~= eventHandler;
+		}
+	}
+	///ditto
+	void registerEventHandler(void function(Event event) eventHandler, Event event = Event.ALL) {
 		import std.functional;
 		registerEventHandler(toDelegate(eventHandler), event);
 	}
+	/**
+	 * Waits & executes functions for events forever, until thread is killed, or until the device stops being valid; whichever occurs first.
+	 * Throws: FileException on I/O error, usually if device becomes inaccessible
+	 */
 	void readEvents() {
 		while (true)
 			readNextEvent();
 	}
+	/**
+	 * Waits & executes functions for one event.
+	 * Throws: FileException on I/O error, usually if device becomes inaccessible
+	 */
 	void readNextEvent() {
 		version(linux) {
 			input_event[1] t;
 			while (true) {
 				handle.rawRead(t);
-				void delegate(Events event)[] handlers;
-				Events event;
+				Event event;
 				if ((t[0].type == EV_KEY) && (t[0].code == BTN_MISC)) {
 					if (t[0].value == 1)
-						event = Events.BUTTONDOWN;
+						event = Event.BUTTONDOWN;
 					else if (t[0].value == 0)
-						event = Events.BUTTONUP;
+						event = Event.BUTTONUP;
 				}
 				else if ((t[0].type == EV_REL) && (t[0].code == REL_DIAL)) {
 					if (t[0].value >= 1)
-						event = Events.CLOCKWISE;
+						event = Event.CLOCKWISE;
 					else if (t[0].value <= -1)
-						event = Events.COUNTERCLOCKWISE;
+						event = Event.COUNTERCLOCKWISE;
 				}
 				else if ((t[0].type == EV_SYN) && (t[0].code == SYN_REPORT)) {
 					break;
@@ -95,49 +211,64 @@ class PowerMate {
 					debug writeln("Unhandled: ", t[0]);
 					continue;
 				}
-				switch(event) {
-					case Events.BUTTONDOWN: handlers = ButtonDownEvents; break;
-					case Events.BUTTONUP: handlers = ButtonUpEvents; break;
-					case Events.CLOCKWISE: handlers = ClockwiseEvents; break;
-					case Events.COUNTERCLOCKWISE: handlers = CounterclockwiseEvents; break;
-					default: throw new Exception("Unhandled event!");
-				}
-				foreach (handler; handlers)
+				foreach (handler; eventHandlers[event])
 					handler(event);
 			}
 		}
 	}
+	/**
+	 * Updates LED parameters on device.
+	 * Throws: FileException if unable to write to device for some reason.
+	 */
 	public void update() {
 		version(linux) {
 			input_event t;
 			t.type = EV_MSC;
 			t.code = MSC_PULSELED;
-			t.value = Brightness | (PulseSpeed << 8) | (PulseTable << 17) | (PulseAsleep << 19) | (PulseAwake << 20);
-			debug writefln("Brightness: %d\nPulse Speed: %d\nPulse Table: %d\nPulse Asleep: %s\nPulse Awake: %s", Brightness, PulseSpeed, PulseTable, PulseAsleep, PulseAwake);
+			t.value = Brightness | (PulseSpeed << 8) | (PulseStyle << 17) | (PulseAsleep << 19) | (PulseAwake << 20);
+			debug writefln("Brightness: %d\nPulse Speed: %d\nPulse Style: %s\nPulse Asleep: %s\nPulse Awake: %s", Brightness, PulseSpeed, PulseStyle, PulseAsleep, PulseAwake);
 			handle.rawWrite([t]);
 		}
 	}
 }
-
+/**
+ * Determines if file is a PowerMate device connected to the system.
+ * Returns: true if file is a PowerMate device, false otherwise.
+ * Bugs: Only functions on linux
+ */
+@property bool isPowerMate(File inFile) {
+	version(linux) {
+		import core.sys.posix.sys.ioctl;
+		char[255] name;
+		if (ioctl(inFile.fileno(), EVIOCGNAME(name.length), &name) < 0) {
+			return false;
+		}
+		string fixedName = name[0..countUntil(to!string(name), "\0")].idup;
+		if (fixedName == "Griffin PowerMate")
+			return true;
+	}
+	return false;
+}
+///ditto
+@property bool isPowerMate(string filename) {
+	return File(filename, "r").isPowerMate;
+}
+/**
+ * Attempts to find a Griffin PowerMate connected to this system.
+ * Returns: The first PowerMate found on the system.
+ * Bugs: Only functions on linux
+ */
 PowerMate findPowerMate() {
 	version(linux) {
 		import core.sys.posix.sys.ioctl;
 		import std.file;
+		static final string EventDir = "/dev/input"; //directory containing input event devices
+		static final string EventGlob = "event*"; //wildcard to match event devices in directory only
 		bool couldNotOpen = false;
-		bool isPowerMate(File inFile) {
-			char[255] name;
-			if (ioctl(inFile.fileno(), EVIOCGNAME(name.length), &name) < 0) {
-				return false;
-			}
-			string fixedName = name[0..countUntil(to!string(name), "\0")].idup;
-			if (fixedName == "Griffin PowerMate")
-				return true;
-			return false;
-		}
-		foreach (string eventfile; dirEntries("/dev/input", "event*", SpanMode.shallow)) {
+		foreach (string eventfile; dirEntries(EventDir, EventGlob, SpanMode.shallow)) {
 			try {
 				File testFile = File(eventfile, "r+");
-				if (isPowerMate(testFile))
+				if (testFile.isPowerMate)
 					return new PowerMate(testFile);
 			} catch (ErrnoException e) {
 				couldNotOpen = true;
@@ -146,7 +277,11 @@ PowerMate findPowerMate() {
 		if (couldNotOpen)
 			throw new Exception("Could not open some event files");
 	}
-	throw new Exception("Powermate not found");
+	throw new NoPowerMateException();
+}
+
+class NoPowerMateException : Exception {
+	this() { super("Powermate not found"); }
 }
 
 unittest {
@@ -154,14 +289,14 @@ unittest {
 	int unclicks = 0;
 	int clockwiseturns = 0;
 	int counterclockwiseturns = 0;
-	void testHandler(PowerMate.Events event) {
-		if (event == PowerMate.Events.BUTTONDOWN)
+	void testHandler(PowerMate.Event event) {
+		if (event == PowerMate.Event.BUTTONDOWN)
 			clicks++;
-		else if (event == PowerMate.Events.BUTTONUP)
+		else if (event == PowerMate.Event.BUTTONUP)
 			unclicks++;
-		else if (event == PowerMate.Events.CLOCKWISE)
+		else if (event == PowerMate.Event.CLOCKWISE)
 			clockwiseturns++;
-		else if (event == PowerMate.Events.COUNTERCLOCKWISE)
+		else if (event == PowerMate.Event.COUNTERCLOCKWISE)
 			counterclockwiseturns++;
 	}
 	version(linux) {
@@ -184,10 +319,7 @@ unittest {
 		t1file.rawWrite(tmpStruct);
 		t1file.close();
 		auto powermate = new PowerMate(File("testEventData", "r"));
-		powermate.registerEventHandler(&testHandler, PowerMate.Events.BUTTONDOWN);
-		powermate.registerEventHandler(&testHandler, PowerMate.Events.BUTTONUP);
-		powermate.registerEventHandler(&testHandler, PowerMate.Events.CLOCKWISE);
-		powermate.registerEventHandler(&testHandler, PowerMate.Events.COUNTERCLOCKWISE);
+		powermate.registerEventHandler(&testHandler);
 		foreach (i; 0..4)
 			powermate.readNextEvent();
 		assert(clicks == 1, "Clicks mismatch");
@@ -198,14 +330,16 @@ unittest {
 		auto powermate2 = new PowerMate(t2file);
 		powermate2.Brightness = 127;
 		powermate2.PulseSpeed = 255;
-		powermate2.PulseTable = 1;
+		powermate2.PulseStyle = PowerMate.PulseStyles.STYLE2;
 		powermate2.PulseAwake = true;
 		powermate2.PulseAsleep = true;
 		powermate2.update();
 		ubyte[24] buffer;
 		t2file.seek(0);
 		t2file.rawRead(buffer);
-		assert(buffer == [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x04, 0x00, 0x01, 0x00, 0x7f, 0xff, 0x1a, 0x00], "Output Mismatch");
+		version(X86) assert(buffer == [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x04, 0x00, 0x01, 0x00, 0x7f, 0xff, 0x1a, 0x00], "Output Mismatch");
+		version(X86_64) assert(buffer == [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x04, 0x00, 0x01, 0x00, 0x7f, 0xff, 0x1a, 0x00], "Output Mismatch");
+		version(ARM) assert(buffer == [0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x04, 0x00, 0x01, 0x00, 0x7f, 0xff, 0x1a, 0x00], "Output Mismatch");
 	}
 }
 
