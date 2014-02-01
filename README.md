@@ -9,8 +9,7 @@
 
 ## Example usage
 ```D
-auto powermate = new Powermate("/dev/input/event0"); //Open PowerMate device with read and write access
-auto powermate = new Powermate(File("/dev/input/event0", "r")); //read-only access, only event handlers will be available
+auto powermate = findPowerMate(); // Find and open PowerMate device with read and write access
 powermate.Brightness = 0xFF; //Set brightness to maximum
 powermate.PulseSpeed = 0xFF; //Set pulse speed to maximum
 powermate.PulseTable = 1; //Use alternate pulse style
