@@ -1,0 +1,9 @@
+{
+	"name": "dpowermate",
+	"description": "D library for the Griffin Powermate.",
+	"copyright": "Copyright © 2014, Cameron",
+	"authors": ["Cameron \"Herringway\" Ross"],
+	"license": "BSD 3-clause",
+	"targetType": "library",
+	"homepage": "https://github.com/Herringway/dpowermate"
+}
