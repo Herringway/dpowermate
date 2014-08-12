@@ -33,12 +33,12 @@ version(linux) {
  * Bugs: Only functions on linux
  * Examples: 
  * --------------------
- * auto powermate = new Powermate("/dev/input/event0"); //Open PowerMate device with read and write access
- * auto powermate = new Powermate(File("/dev/input/event0", "r")); //read-only access, only event handlers will be available
+ * auto powermate = new PowerMate("/dev/input/event0"); //Open PowerMate device with read and write access
+ * auto powermate = new PowerMate(File("/dev/input/event0", "r")); //read-only access, only event handlers will be available
  * powermate.Brightness = 0xFF; //Set brightness to maximum
  * powermate.PulseSpeed = 0xFF; //Set pulse speed to maximum
  * powermate.PulseTable = 1; //Use alternate pulse style
- * powermate.PulseStyle = Powermate.PulseStyles.STYLE2; //Same as above
+ * powermate.PulseStyle = PowerMate.PulseStyles.STYLE2; //Same as above
  * powermate.PulseAsleep = true; //Pulse when PC is asleep
  * powermate.PulseAwake = false; //Do not pulse when PC is awake
  * powermate.update(); //Sets LED parameters
