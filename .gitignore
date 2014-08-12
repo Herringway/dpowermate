@@ -1,3 +1,6 @@
 *.html
 *.o
-powermate
+dpowermate
+*.exe
+__test_library__
+.dub
