@@ -271,10 +271,10 @@ unittest {
 		powermate2.PulseAwake = true;
 		powermate2.PulseAsleep = true;
 		powermate2.update();
-		ubyte[24] buffer;
+		union input_test { input_event a; ubyte[a.sizeof] b; }
+		ubyte[input_test.a.sizeof] buffer;
 		t2file.seek(0);
 		t2file.rawRead(buffer);
-		union input_test { input_event a; ubyte[a.sizeof] b; }
 		static input_test test = {a: input_event(timeval(), 0x0004, 0x0001, 0x001AFF7F)}; //Output should equal this on all platforms
 		assert(buffer == test.b, "Bad output from LED update");
 	}
