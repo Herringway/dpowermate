@@ -5,8 +5,9 @@ import std.stdio, std.conv, std.string, std.algorithm, std.exception;
 version(linux) {
 	import core.sys.posix.sys.ioctl;
 	import core.sys.posix.sys.time;
-	uint EVIOCGNAME(uint len) {
-		return cast(uint)_IOC(_IOC_READ, 'E', len);
+	import core.stdc.config;
+	c_ulong EVIOCGNAME(T)() {
+		return cast(c_ulong)_IOC!(T)(_IOC_READ, 'E', 6);
 	}
 	static ushort EV_SYN = 0; // Synchronization events
 	static ushort EV_KEY = 1; // Button push events
@@ -170,12 +171,14 @@ class PowerMate {
  */
 @property bool isPowerMate(File inFile) {
 	version(linux) {
-		import core.sys.posix.sys.ioctl;
+		import core.sys.posix.sys.ioctl, core.sys.linux.errno;
 		char[255] name;
-		if (ioctl(inFile.fileno(), EVIOCGNAME(name.length), &name) < 0) {
+		if (ioctl(inFile.fileno(), EVIOCGNAME!(typeof(name)), &name) < 0) {
+			debug writefln("Error reading name: %d", errno);
 			return false;
 		}
 		string fixedName = name[0..countUntil(to!string(name), "\0")].idup;
+		debug writefln("Found device: %s", fixedName);
 		if (fixedName == "Griffin PowerMate")
 			return true;
 	}
@@ -198,6 +201,7 @@ PowerMate findPowerMate() {
 		static final string EventGlob = "event*"; //wildcard to match event devices in directory only
 		bool couldNotOpen = false;
 		foreach (string eventfile; dirEntries(EventDir, EventGlob, SpanMode.shallow)) {
+			debug writefln("Found event file: %s", eventfile);
 			try {
 				File testFile = File(eventfile, "r+");
 				if (testFile.isPowerMate)
